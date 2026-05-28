@@ -86,7 +86,7 @@ export function ScannerMain({ onResult }: { onResult?: (result: any) => void }) 
         description: data.description,
         symptoms: data.symptoms,
         solution: data.solution,
-        image_url: data.image_url,
+        image_url: preview || data.image_url,
         crop_type: data.scan?.crop_type || 'Unknown Crop',
         recommendations: [
           {
