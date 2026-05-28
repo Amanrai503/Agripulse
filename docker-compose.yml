@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+
+  postgres:
+    image: postgres:15
+    container_name: cropscan_db
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 1234
+      POSTGRES_DB: crop_dev
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d crop_dev"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  ml-service:
+    build: ./backend_ml
+    container_name: cropscan_ml
+    restart: always
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend_ml/my_model:/app/my_model  # mount model separately
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  nextjs:
+    build: ./frontend
+    container_name: cropscan_frontend
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=postgresql://postgres:1234@postgres:5432/crop_dev
+      - ML_SERVICE_URL=http://ml-service:8000
+      - NEXT_PUBLIC_ML_SERVICE_URL=http://localhost:8000
+    volumes:
+      - ./frontend/public/uploads:/app/public/uploads  # persist uploaded images
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ml-service:
+        condition: service_started
+
+volumes:
+  postgres_data:

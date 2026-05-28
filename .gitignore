@@ -1,0 +1,26 @@
+# Dependency directories
+frontend/node_modules/
+backend_ml/venv/
+backend_ml/.venv/
+**/__pycache__/
+*.pyc
+
+# Build outputs
+frontend/.next/
+frontend/out/
+frontend/build/
+
+# Local database storage
+postgres/data/
+**/pgdata/
+
+# Environment and sensitive keys
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Operating System files
+.DS_Store
+Thumbs.db
