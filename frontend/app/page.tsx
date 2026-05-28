@@ -187,6 +187,66 @@ export default function DashboardPage() {
     ? Math.round((scans.reduce((sum, scan) => sum + Number(scan.confidence_score || 0), 0) / totalScansCount) * 100) 
     : 98.2;
 
+  // Dynamic crop distribution based on scans
+  const distributionColors = [
+    { text: "text-emerald-800", bg: "bg-emerald-800", hex: "#064e3b" },
+    { text: "text-emerald-600", bg: "bg-emerald-600", hex: "#059669" },
+    { text: "text-slate-600",   bg: "bg-slate-600",   hex: "#475569" },
+    { text: "text-slate-400",   bg: "bg-slate-400",   hex: "#94a3b8" },
+    { text: "text-slate-300",   bg: "bg-slate-300",   hex: "#cbd5e1" },
+  ];
+
+  const activeScans = scans.length > 0 ? scans : displayScans;
+  const cropCounts: { [key: string]: number } = {};
+  
+  activeScans.forEach(scan => {
+    let crop = scan.crop_type || "Unknown";
+    crop = crop.replace(/\s+Leaf$/i, "");
+    cropCounts[crop] = (cropCounts[crop] || 0) + 1;
+  });
+
+  const totalCropsCount = activeScans.length;
+  
+  const rawDistribution = Object.keys(cropCounts).map(crop => {
+    const count = cropCounts[crop];
+    const percentage = totalCropsCount > 0 ? (count / totalCropsCount) * 100 : 0;
+    return { crop, count, percentage };
+  }).sort((a, b) => b.count - a.count);
+
+  let topCrops = rawDistribution;
+  if (rawDistribution.length > 4) {
+    topCrops = rawDistribution.slice(0, 3);
+    const others = rawDistribution.slice(3);
+    const otherCount = others.reduce((sum, item) => sum + item.count, 0);
+    const otherPercentage = others.reduce((sum, item) => sum + item.percentage, 0);
+    topCrops.push({
+      crop: "Other",
+      count: otherCount,
+      percentage: otherPercentage
+    });
+  }
+
+  const circumference = 238.76;
+  let cumulativePercentage = 0;
+  
+  const cropSegments = topCrops.map((item, index) => {
+    const roundedPercentage = Math.round(item.percentage);
+    const strokeDashoffset = circumference * (1 - item.percentage / 100);
+    const rotationAngle = cumulativePercentage * 3.6;
+    cumulativePercentage += item.percentage;
+    
+    const colorObj = distributionColors[index] || { text: "text-slate-200", bg: "bg-slate-200", hex: "#cbd5e1" };
+    
+    return {
+      crop: item.crop,
+      count: item.count,
+      percentage: roundedPercentage,
+      strokeDashoffset,
+      rotationAngle,
+      color: colorObj
+    };
+  });
+
   return (
     <div className="flex min-h-screen bg-[#f5f7f4] font-sans selection:bg-green-100 selection:text-green-900">
       <Sidebar />
@@ -215,11 +275,11 @@ export default function DashboardPage() {
                 </div>
                 
                 <h2 className="text-4xl md:text-5xl font-extrabold text-white tracking-tight leading-tight max-w-xl">
-                  Monitor Crop Health with <span className="text-[#52b788] italic font-serif">AI Intelligence</span>
+                  Diagnose Crop Diseases & <span className="text-[#52b788] italic font-serif">Optimize Field Yields</span>
                 </h2>
                 
                 <p className="text-emerald-200/80 text-sm md:text-base max-w-lg font-medium leading-relaxed">
-                  Advanced spectral analysis and computer vision providing real-time diagnostic insights for global food security.
+                  Instantly scan crop samples to identify leaf pathogens, track environmental conditions, and access actionable treatments to secure your harvest.
                 </p>
                 
                 <div className="flex flex-wrap gap-4 pt-2">
@@ -481,13 +541,13 @@ export default function DashboardPage() {
                       <Button 
                         onClick={(e) => {
                           e.stopPropagation();
-                          alert("Initializing drone remote feed...");
+                          fileInputRef.current?.click();
                         }}
                         variant="outline"
                         className="bg-white hover:bg-slate-50 border-slate-200 text-slate-700 font-bold rounded-xl px-5 h-10 text-xs flex items-center gap-2 shadow-sm"
                       >
-                        <Compass className="w-4 h-4 text-emerald-600 animate-spin" style={{ animationDuration: "10s" }} />
-                        Access Drone Cam
+                        <Plus className="w-4 h-4 text-emerald-600" />
+                        Add New Scan
                       </Button>
                     </>
                   )}
@@ -504,60 +564,72 @@ export default function DashboardPage() {
                     <h3 className="text-lg font-bold text-slate-900">Growth Trends</h3>
                   </div>
                   
-                  {/* SVG Bar Chart with hover states */}
-                  <div className="flex-1 flex flex-col justify-end min-h-[180px]">
-                    <div className="flex items-end justify-between gap-2 h-36 px-2">
-                      {/* Mon: 40% */}
-                      <div className="flex-1 flex flex-col items-center gap-2 group cursor-pointer">
-                        <div className="w-full bg-[#e8f5e9] hover:bg-emerald-200 rounded-lg transition-all duration-300 relative h-[40%]">
-                          <span className="absolute -top-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[9px] font-bold py-0.5 px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">40</span>
-                        </div>
-                        <span className="text-[10px] text-slate-400 font-bold">MON</span>
+                  {scans.length < 10 ? (
+                    <div className="flex-1 flex flex-col items-center justify-center min-h-[180px] text-center p-4">
+                      <div className="w-12 h-12 bg-amber-50 rounded-full flex items-center justify-center text-amber-600 mb-3 border border-amber-100/50">
+                        <AlertTriangle className="w-6 h-6" />
                       </div>
-                      {/* Tue: 65% */}
-                      <div className="flex-1 flex flex-col items-center gap-2 group cursor-pointer">
-                        <div className="w-full bg-[#c8e6c9] hover:bg-emerald-300 rounded-lg transition-all duration-300 relative h-[65%]">
-                          <span className="absolute -top-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[9px] font-bold py-0.5 px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">65</span>
+                      <h4 className="font-bold text-slate-800 text-sm mb-1">Insufficient Data</h4>
+                      <p className="text-xs text-slate-400 max-w-[200px] leading-relaxed">
+                        Weekly historical data is insufficient. Please perform at least 10 scans to generate trend models.
+                      </p>
+                    </div>
+                  ) : (
+                    /* SVG Bar Chart with hover states */
+                    <div className="flex-1 flex flex-col justify-end min-h-[180px]">
+                      <div className="flex items-end justify-between gap-2 h-36 px-2">
+                        {/* Mon: 40% */}
+                        <div className="flex-1 flex flex-col items-center gap-2 group cursor-pointer">
+                          <div className="w-full bg-[#e8f5e9] hover:bg-emerald-200 rounded-lg transition-all duration-300 relative h-[40%]">
+                            <span className="absolute -top-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[9px] font-bold py-0.5 px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">40</span>
+                          </div>
+                          <span className="text-[10px] text-slate-400 font-bold">MON</span>
                         </div>
-                        <span className="text-[10px] text-slate-400 font-bold">TUE</span>
-                      </div>
-                      {/* Wed: 50% */}
-                      <div className="flex-1 flex flex-col items-center gap-2 group cursor-pointer">
-                        <div className="w-full bg-[#e8f5e9] hover:bg-emerald-200 rounded-lg transition-all duration-300 relative h-[50%]">
-                          <span className="absolute -top-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[9px] font-bold py-0.5 px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">50</span>
+                        {/* Tue: 65% */}
+                        <div className="flex-1 flex flex-col items-center gap-2 group cursor-pointer">
+                          <div className="w-full bg-[#c8e6c9] hover:bg-emerald-300 rounded-lg transition-all duration-300 relative h-[65%]">
+                            <span className="absolute -top-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[9px] font-bold py-0.5 px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">65</span>
+                          </div>
+                          <span className="text-[10px] text-slate-400 font-bold">TUE</span>
                         </div>
-                        <span className="text-[10px] text-slate-400 font-bold">WED</span>
-                      </div>
-                      {/* Thu: 85% */}
-                      <div className="flex-1 flex flex-col items-center gap-2 group cursor-pointer">
-                        <div className="w-full bg-[#a1d99b] hover:bg-emerald-400 rounded-lg transition-all duration-300 relative h-[85%]">
-                          <span className="absolute -top-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[9px] font-bold py-0.5 px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">85</span>
+                        {/* Wed: 50% */}
+                        <div className="flex-1 flex flex-col items-center gap-2 group cursor-pointer">
+                          <div className="w-full bg-[#e8f5e9] hover:bg-emerald-200 rounded-lg transition-all duration-300 relative h-[50%]">
+                            <span className="absolute -top-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[9px] font-bold py-0.5 px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">50</span>
+                          </div>
+                          <span className="text-[10px] text-slate-400 font-bold">WED</span>
                         </div>
-                        <span className="text-[10px] text-slate-400 font-bold">THU</span>
-                      </div>
-                      {/* Fri: 70% */}
-                      <div className="flex-1 flex flex-col items-center gap-2 group cursor-pointer">
-                        <div className="w-full bg-[#c8e6c9] hover:bg-emerald-300 rounded-lg transition-all duration-300 relative h-[70%]">
-                          <span className="absolute -top-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[9px] font-bold py-0.5 px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">70</span>
+                        {/* Thu: 85% */}
+                        <div className="flex-1 flex flex-col items-center gap-2 group cursor-pointer">
+                          <div className="w-full bg-[#a1d99b] hover:bg-emerald-400 rounded-lg transition-all duration-300 relative h-[85%]">
+                            <span className="absolute -top-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[9px] font-bold py-0.5 px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">85</span>
+                          </div>
+                          <span className="text-[10px] text-slate-400 font-bold">THU</span>
                         </div>
-                        <span className="text-[10px] text-slate-400 font-bold">FRI</span>
-                      </div>
-                      {/* Sat: 95% */}
-                      <div className="flex-1 flex flex-col items-center gap-2 group cursor-pointer">
-                        <div className="w-full bg-[#1b4332] rounded-lg transition-all duration-300 relative h-[95%]">
-                          <span className="absolute -top-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[9px] font-bold py-0.5 px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">95</span>
+                        {/* Fri: 70% */}
+                        <div className="flex-1 flex flex-col items-center gap-2 group cursor-pointer">
+                          <div className="w-full bg-[#c8e6c9] hover:bg-emerald-300 rounded-lg transition-all duration-300 relative h-[70%]">
+                            <span className="absolute -top-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[9px] font-bold py-0.5 px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">70</span>
+                          </div>
+                          <span className="text-[10px] text-slate-400 font-bold">FRI</span>
                         </div>
-                        <span className="text-[10px] text-slate-400 font-bold">SAT</span>
-                      </div>
-                      {/* Sun: 30% */}
-                      <div className="flex-1 flex flex-col items-center gap-2 group cursor-pointer">
-                        <div className="w-full bg-[#e8f5e9] hover:bg-emerald-200 rounded-lg transition-all duration-300 relative h-[30%]">
-                          <span className="absolute -top-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[9px] font-bold py-0.5 px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">30</span>
+                        {/* Sat: 95% */}
+                        <div className="flex-1 flex flex-col items-center gap-2 group cursor-pointer">
+                          <div className="w-full bg-[#1b4332] rounded-lg transition-all duration-300 relative h-[95%]">
+                            <span className="absolute -top-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[9px] font-bold py-0.5 px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">95</span>
+                          </div>
+                          <span className="text-[10px] text-slate-400 font-bold">SAT</span>
                         </div>
-                        <span className="text-[10px] text-slate-400 font-bold">SUN</span>
+                        {/* Sun: 30% */}
+                        <div className="flex-1 flex flex-col items-center gap-2 group cursor-pointer">
+                          <div className="w-full bg-[#e8f5e9] hover:bg-emerald-200 rounded-lg transition-all duration-300 relative h-[30%]">
+                            <span className="absolute -top-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[9px] font-bold py-0.5 px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">30</span>
+                          </div>
+                          <span className="text-[10px] text-slate-400 font-bold">SUN</span>
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  )}
                 </div>
 
                 {/* WIDGET C: CROP DISTRIBUTION */}
@@ -571,60 +643,39 @@ export default function DashboardPage() {
                   <div className="flex-1 flex flex-col items-center justify-center relative min-h-[180px]">
                     <div className="relative w-36 h-36 flex items-center justify-center">
                       <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
-                        {/* wheat segment - 76% (green) */}
-                        <circle
-                          cx="50"
-                          cy="50"
-                          r="38"
-                          className="text-emerald-800 stroke-current"
-                          strokeWidth="10"
-                          strokeDasharray="238.7"
-                          strokeDashoffset="57.3" // 76% of 238.7 is 181.4
-                          fill="transparent"
-                        />
-                        {/* corn segment - 15% (dark gray) */}
-                        <circle
-                          cx="50"
-                          cy="50"
-                          r="38"
-                          className="text-slate-600 stroke-current"
-                          strokeWidth="10"
-                          strokeDasharray="238.7"
-                          strokeDashoffset="202.9"
-                          fill="transparent"
-                          transform="rotate(273.6, 50, 50)" // Rotate starting point
-                        />
-                        {/* other segment - 9% (light gray) */}
-                        <circle
-                          cx="50"
-                          cy="50"
-                          r="38"
-                          className="text-slate-200 stroke-current"
-                          strokeWidth="10"
-                          strokeDasharray="238.7"
-                          strokeDashoffset="217.2"
-                          fill="transparent"
-                          transform="rotate(327.6, 50, 50)" // Rotate starting point
-                        />
+                        {cropSegments.map((seg, idx) => (
+                          <circle
+                            key={idx}
+                            cx="50"
+                            cy="50"
+                            r="38"
+                            className={`${seg.color.text} stroke-current`}
+                            strokeWidth="10"
+                            strokeDasharray="238.76"
+                            strokeDashoffset={seg.strokeDashoffset}
+                            fill="transparent"
+                            transform={`rotate(${seg.rotationAngle}, 50, 50)`}
+                          />
+                        ))}
                       </svg>
                       {/* Centered label */}
                       <div className="absolute text-center">
-                        <span className="block text-2xl font-black text-slate-950">76%</span>
-                        <span className="block text-[8px] text-slate-400 font-bold uppercase tracking-wider">Wheat</span>
+                        <span className="block text-2xl font-black text-slate-950">
+                          {cropSegments.length > 0 ? `${cropSegments[0].percentage}%` : "0%"}
+                        </span>
+                        <span className="block text-[8px] text-slate-400 font-bold uppercase tracking-wider">
+                          {cropSegments.length > 0 ? cropSegments[0].crop : "None"}
+                        </span>
                       </div>
                     </div>
 
                     {/* Chart Legend */}
-                    <div className="flex gap-4 mt-6 text-xs justify-center w-full">
-                      <span className="flex items-center gap-1.5 text-slate-600 font-medium">
-                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-800"></span> Wheat
-                      </span>
-                      <span className="flex items-center gap-1.5 text-slate-600 font-medium">
-                        <span className="w-2.5 h-2.5 rounded-full bg-slate-600"></span> Corn
-                      </span>
-                      <span className="flex items-center gap-1.5 text-slate-600 font-medium">
-                        <span className="w-2.5 h-2.5 rounded-full bg-slate-200"></span> Other
-                      </span>
+                    <div className="flex flex-wrap gap-4 mt-6 text-xs justify-center w-full">
+                      {cropSegments.map((seg, idx) => (
+                        <span key={idx} className="flex items-center gap-1.5 text-slate-600 font-medium">
+                          <span className={`w-2.5 h-2.5 rounded-full ${seg.color.bg}`}></span> {seg.crop} ({seg.percentage}%)
+                        </span>
+                      ))}
                     </div>
                   </div>
                 </div>
@@ -724,10 +775,10 @@ export default function DashboardPage() {
                     <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block mb-1">Humidity</span>
                     <span className="text-xl font-extrabold text-slate-900 block">64%</span>
                   </div>
-                  {/* Temperature: 24C */}
+                  {/* Temperature: 36C */}
                   <div className="p-4 bg-slate-50/50 hover:bg-slate-50 border border-slate-100 rounded-2xl transition-all">
                     <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block mb-1">Temperature</span>
-                    <span className="text-xl font-extrabold text-slate-900 block">24°C</span>
+                    <span className="text-xl font-extrabold text-slate-900 block">36°C</span>
                   </div>
                   {/* Soil pH: 6.8 */}
                   <div className="p-4 bg-slate-50/50 hover:bg-slate-50 border border-slate-100 rounded-2xl transition-all">

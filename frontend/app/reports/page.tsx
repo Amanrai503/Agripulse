@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Sidebar } from "@/components/sidebar";
 import { TopNavbar } from "@/components/top-navbar";
 import {
@@ -118,6 +118,88 @@ export default function ReportsPage() {
   const [toastMsg, setToastMsg] = useState("");
   const [timeRange, setTimeRange] = useState("May 1 - May 31, 2025");
   const [showDateDropdown, setShowDateDropdown] = useState(false);
+  const [scans, setScans] = useState<any[]>([]);
+  const [loadingScans, setLoadingScans] = useState(true);
+
+  // Fetch scans from database
+  const fetchScans = async () => {
+    try {
+      const response = await fetch("/api/scans");
+      if (response.ok) {
+        const data = await response.json();
+        setScans(data.scans || []);
+      }
+    } catch (error) {
+      console.error("Error fetching scans:", error);
+    } finally {
+      setLoadingScans(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchScans();
+  }, []);
+
+  // Define fallback mock data matching database table structures if DB has fewer scans
+  const mockScans = [
+    { disease_name: "Early Blight", status: "AT RISK", severity: "High", location: "North Plot" },
+    { disease_name: "Healthy", status: "OPTIMAL", severity: "None", location: "West Ridge" },
+    { disease_name: "Leaf Spot", status: "AT RISK", severity: "Medium", location: "East Plot" },
+    { disease_name: "Rust", status: "AT RISK", severity: "Medium", location: "South Plot" },
+    { disease_name: "Powdery Mildew", status: "AT RISK", severity: "Low", location: "East Plot" },
+  ];
+
+  const activeScans = scans.length > 0 ? scans : mockScans;
+
+  // 1. Total Fields (unique locations)
+  const uniqueFields = Array.from(new Set(activeScans.map(s => s.location || s.crop_type || "Main Ridge").filter(Boolean)));
+  const totalFieldsCount = uniqueFields.length > 0 ? uniqueFields.length : 5;
+
+  // 2. Healthy Crops vs Diseased Crops
+  const totalScansCount = activeScans.length;
+  const healthyCropsCount = activeScans.filter(scan => {
+    const isHealthy = (scan.disease_name || "").toLowerCase().includes("healthy") || 
+                      (scan.status || "").toLowerCase() === "optimal" ||
+                      (scan.severity || "").toLowerCase() === "none";
+    return isHealthy;
+  }).length;
+  
+  const diseasedCropsCount = totalScansCount - healthyCropsCount;
+  const healthyPercentage = totalScansCount > 0 ? Math.round((healthyCropsCount / totalScansCount) * 100) : 100;
+  const diseasedPercentage = totalScansCount > 0 ? Math.round((diseasedCropsCount / totalScansCount) * 100) : 0;
+
+  // 3. Most Common Disease
+  const diseaseCounts: { [key: string]: number } = {};
+  let totalDiseasedCases = 0;
+  activeScans.forEach(scan => {
+    const isHealthy = (scan.disease_name || "").toLowerCase().includes("healthy") || 
+                      (scan.status || "").toLowerCase() === "optimal" ||
+                      (scan.severity || "").toLowerCase() === "none";
+    if (!isHealthy && scan.disease_name) {
+      diseaseCounts[scan.disease_name] = (diseaseCounts[scan.disease_name] || 0) + 1;
+      totalDiseasedCases++;
+    }
+  });
+
+  let mostCommonDisease = "None";
+  let mostCommonDiseasePercentage = 0;
+  
+  const sortedDiseases = Object.keys(diseaseCounts).map(name => ({
+    name,
+    count: diseaseCounts[name]
+  })).sort((a, b) => b.count - a.count);
+
+  if (sortedDiseases.length > 0) {
+    mostCommonDisease = sortedDiseases[0].name;
+    mostCommonDiseasePercentage = totalDiseasedCases > 0 ? Math.round((sortedDiseases[0].count / totalDiseasedCases) * 100) : 0;
+  }
+
+  // 4. High Risk Fields
+  const highRiskFieldsCount = Array.from(new Set(
+    activeScans
+      .filter(scan => (scan.severity || "").toLowerCase() === "high")
+      .map(scan => scan.location || scan.crop_type || "Main Ridge")
+  )).length;
 
   const triggerToast = (msg: string) => {
     setToastMsg(msg);
@@ -365,7 +447,7 @@ export default function ReportsPage() {
                 </div>
                 <div>
                   <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-0.5">Total Fields</span>
-                  <h4 className="text-2xl font-black text-slate-900 tracking-tight leading-none mb-0.5">12</h4>
+                  <h4 className="text-2xl font-black text-slate-900 tracking-tight leading-none mb-0.5">{totalFieldsCount}</h4>
                   <span className="text-[10px] text-slate-400 font-semibold block">Fields</span>
                 </div>
               </div>
@@ -379,7 +461,7 @@ export default function ReportsPage() {
                 </div>
                 <div>
                   <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-0.5">Healthy Crops</span>
-                  <h4 className="text-2xl font-black text-slate-900 tracking-tight leading-none mb-0.5">82%</h4>
+                  <h4 className="text-2xl font-black text-slate-900 tracking-tight leading-none mb-0.5">{healthyPercentage}%</h4>
                   <span className="text-[10px] text-emerald-600 font-bold block">Healthy</span>
                 </div>
               </div>
@@ -393,7 +475,7 @@ export default function ReportsPage() {
                 </div>
                 <div>
                   <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-0.5">Diseased Crops</span>
-                  <h4 className="text-2xl font-black text-slate-900 tracking-tight leading-none mb-0.5">18%</h4>
+                  <h4 className="text-2xl font-black text-slate-900 tracking-tight leading-none mb-0.5">{diseasedPercentage}%</h4>
                   <span className="text-[10px] text-amber-600 font-bold block">Needing Attention</span>
                 </div>
               </div>
@@ -407,7 +489,7 @@ export default function ReportsPage() {
                 </div>
                 <div>
                   <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-0.5">Scans This Month</span>
-                  <h4 className="text-2xl font-black text-slate-900 tracking-tight leading-none mb-0.5">37</h4>
+                  <h4 className="text-2xl font-black text-slate-900 tracking-tight leading-none mb-0.5">{totalScansCount}</h4>
                   <span className="text-[10px] text-slate-400 font-semibold block">Scans</span>
                 </div>
               </div>
@@ -421,8 +503,8 @@ export default function ReportsPage() {
                 </div>
                 <div>
                   <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-0.5">Most Common Disease</span>
-                  <h4 className="text-xl font-black text-slate-900 tracking-tight leading-none mb-0.5 truncate">Leaf Spot</h4>
-                  <span className="text-[10px] text-rose-600 font-bold block">24% of cases</span>
+                  <h4 className="text-xl font-black text-slate-900 tracking-tight leading-none mb-0.5 truncate">{mostCommonDisease}</h4>
+                  <span className="text-[10px] text-rose-600 font-bold block">{mostCommonDiseasePercentage}% of cases</span>
                 </div>
               </div>
 
@@ -435,7 +517,7 @@ export default function ReportsPage() {
                 </div>
                 <div>
                   <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-0.5">High Risk Fields</span>
-                  <h4 className="text-2xl font-black text-slate-900 tracking-tight leading-none mb-0.5">5</h4>
+                  <h4 className="text-2xl font-black text-slate-900 tracking-tight leading-none mb-0.5">{highRiskFieldsCount}</h4>
                   <span className="text-[10px] text-rose-600 font-bold block">Fields</span>
                 </div>
               </div>
@@ -464,83 +546,95 @@ export default function ReportsPage() {
                   </div>
                 </div>
 
-                {/* SVG Trend Line Chart */}
-                <div className="relative w-full h-[220px] pt-4 select-none">
-                  {/* Grid Lines */}
-                  <div className="absolute inset-x-0 top-4 bottom-8 flex flex-col justify-between pointer-events-none">
-                    {[50, 40, 30, 20, 10, 0].map((val) => (
-                      <div key={val} className="w-full flex items-center text-[10px] font-bold text-slate-300">
-                        <span className="w-6 shrink-0">{val}</span>
-                        <div className="flex-1 h-px bg-slate-100"></div>
-                      </div>
-                    ))}
+                {scans.length < 10 ? (
+                  <div className="flex flex-col items-center justify-center min-h-[220px] text-center p-4">
+                    <div className="w-12 h-12 bg-amber-50 rounded-full flex items-center justify-center text-amber-600 mb-3 border border-amber-100/50">
+                      <AlertTriangle className="w-6 h-6" />
+                    </div>
+                    <h4 className="font-bold text-slate-800 text-sm mb-1">Insufficient Data</h4>
+                    <p className="text-xs text-slate-400 max-w-[200px] leading-relaxed">
+                      Weekly historical data is insufficient. Please perform at least 10 scans to generate trend models.
+                    </p>
                   </div>
+                ) : (
+                  /* SVG Trend Line Chart */
+                  <div className="relative w-full h-[220px] pt-4 select-none">
+                    {/* Grid Lines */}
+                    <div className="absolute inset-x-0 top-4 bottom-8 flex flex-col justify-between pointer-events-none">
+                      {[50, 40, 30, 20, 10, 0].map((val) => (
+                        <div key={val} className="w-full flex items-center text-[10px] font-bold text-slate-300">
+                          <span className="w-6 shrink-0">{val}</span>
+                          <div className="flex-1 h-px bg-slate-100"></div>
+                        </div>
+                      ))}
+                    </div>
 
-                  {/* SVG Canvas for Chart path */}
-                  <svg className="absolute left-6 right-0 top-4 bottom-8 w-[calc(100%-24px)] h-[calc(100%-32px)] overflow-visible">
-                    <defs>
-                      <linearGradient id="trend-area-grad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#10b981" stopOpacity="0.25" />
-                        <stop offset="100%" stopColor="#10b981" stopOpacity="0.00" />
-                      </linearGradient>
-                    </defs>
+                    {/* SVG Canvas for Chart path */}
+                    <svg className="absolute left-6 right-0 top-4 bottom-8 w-[calc(100%-24px)] h-[calc(100%-32px)] overflow-visible">
+                      <defs>
+                        <linearGradient id="trend-area-grad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#10b981" stopOpacity="0.25" />
+                          <stop offset="100%" stopColor="#10b981" stopOpacity="0.00" />
+                        </linearGradient>
+                      </defs>
 
-                    {/* Filled Area path */}
-                    <path
-                      d="M 10 160 Q 60 120 110 130 T 210 90 T 310 60 T 410 80 T 510 50 L 510 180 L 10 180 Z"
-                      fill="url(#trend-area-grad)"
-                      className="transition-all duration-1000"
-                    />
+                      {/* Filled Area path */}
+                      <path
+                        d="M 10 160 Q 60 120 110 130 T 210 90 T 310 60 T 410 80 T 510 50 L 510 180 L 10 180 Z"
+                        fill="url(#trend-area-grad)"
+                        className="transition-all duration-1000"
+                      />
 
-                    {/* Smooth Spline path */}
-                    <path
-                      d="M 10 160 Q 60 120 110 130 T 210 90 T 310 60 T 410 80 T 510 50"
-                      fill="transparent"
-                      stroke="#047857"
-                      strokeWidth="3"
-                      strokeLinecap="round"
-                    />
+                      {/* Smooth Spline path */}
+                      <path
+                        d="M 10 160 Q 60 120 110 130 T 210 90 T 310 60 T 410 80 T 510 50"
+                        fill="transparent"
+                        stroke="#047857"
+                        strokeWidth="3"
+                        strokeLinecap="round"
+                      />
 
-                    {/* Chart interactive points */}
-                    {[
-                      { x: 10, y: 160, label: "10" },
-                      { x: 110, y: 130, label: "23" },
-                      { x: 210, y: 90, label: "20" },
-                      { x: 310, y: 60, label: "33" },
-                      { x: 410, y: 80, label: "26" },
-                      { x: 510, y: 50, label: "30" }
-                    ].map((pt, i) => (
-                      <g key={i} className="group cursor-pointer">
-                        <circle
-                          cx={pt.x}
-                          cy={pt.y}
-                          r="5"
-                          fill="#ffffff"
-                          stroke="#047857"
-                          strokeWidth="3"
-                        />
-                        <circle
-                          cx={pt.x}
-                          cy={pt.y}
-                          r="9"
-                          fill="#047857"
-                          fillOpacity="0"
-                          className="group-hover:fill-opacity-10 transition-all"
-                        />
-                      </g>
-                    ))}
-                  </svg>
+                      {/* Chart interactive points */}
+                      {[
+                        { x: 10, y: 160, label: "10" },
+                        { x: 110, y: 130, label: "23" },
+                        { x: 210, y: 90, label: "20" },
+                        { x: 310, y: 60, label: "33" },
+                        { x: 410, y: 80, label: "26" },
+                        { x: 510, y: 50, label: "30" }
+                      ].map((pt, i) => (
+                        <g key={i} className="group cursor-pointer">
+                          <circle
+                            cx={pt.x}
+                            cy={pt.y}
+                            r="5"
+                            fill="#ffffff"
+                            stroke="#047857"
+                            strokeWidth="3"
+                          />
+                          <circle
+                            cx={pt.x}
+                            cy={pt.y}
+                            r="9"
+                            fill="#047857"
+                            fillOpacity="0"
+                            className="group-hover:fill-opacity-10 transition-all"
+                          />
+                        </g>
+                      ))}
+                    </svg>
 
-                  {/* X Axis Labels */}
-                  <div className="absolute left-6 right-0 bottom-0 flex justify-between text-[10px] font-bold text-slate-400">
-                    <span>Apr 27</span>
-                    <span>May 4</span>
-                    <span>May 11</span>
-                    <span>May 18</span>
-                    <span>May 25</span>
-                    <span>May 31</span>
+                    {/* X Axis Labels */}
+                    <div className="absolute left-6 right-0 bottom-0 flex justify-between text-[10px] font-bold text-slate-400">
+                      <span>Apr 27</span>
+                      <span>May 4</span>
+                      <span>May 11</span>
+                      <span>May 18</span>
+                      <span>May 25</span>
+                      <span>May 31</span>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             </div>
 
